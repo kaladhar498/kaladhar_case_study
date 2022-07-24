@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -35,17 +36,39 @@ class ProductController extends Controller
             'name' => 'required',
             'price' => 'required',
             'category_id' => 'required',
-            'avatar' => 'required'
+            'avatar' => 'required|mimes:jpeg,jpg,png|max:1024',
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        $product = Product::create($input);
-        return response()->json([
-            "success" => true,
-            "message" => "Product created successfully.",
-            "data" => $product
-        ]);
+        if ($file = $request->file('avatar')) {
+
+            $imageName = time() . '.' . $file->extension();
+            $file_path = 'products/' . $imageName;
+            
+            DB::beginTransaction();
+            try {
+                $product = Product::create([
+                    'name' => $request->name,
+                    'user_id' => auth()->user()->id,
+                    'category_id' => $request->category_id,
+                    'price' => $request->price,
+                    'avatar' => $file_path,
+                    'description' => $request->description
+                ]);
+                
+                DB::commit();
+                $file->move(public_path('products'), $imageName);
+                return response()->json([
+                    "success" => true,
+                    "message" => "Product created successfully.",
+                    "data" => $product
+                ]);
+            } catch (\Exception $e) {
+                DB::rollback();
+                return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+            }
+        }
     }
     /**
      * Display the specified resource.
@@ -57,7 +80,7 @@ class ProductController extends Controller
     {
         $product = Product::find($id);
         if (is_null($product)) {
-            return $this->sendError('Product not found.');
+            return response()->json(['error' => 'Product not found.'], 401);
         }
         return response()->json([
             "success" => true,
@@ -81,19 +104,34 @@ class ProductController extends Controller
             'category_id' => 'required'
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        $product->name = $input['name'];
-        $product->price = $input['price'];
-        $product->category_id = $input['category_id'];
-        $product->description = $input['description'];
-        $product->avatar = $input['avatar'];
-        $product->save();
-        return response()->json([
-            "success" => true,
-            "message" => "Product updated successfully.",
-            "data" => $product
-        ]);
+        DB::beginTransaction();
+        try {
+            if ($file = $request->file('avatar')) {
+                $imageName = time() . '.' . $file->extension();
+                $file_path = 'products/' . $imageName;
+                $file->move(public_path('products'), $imageName);
+                $product->avatar = $file_path;
+            }
+            $product->name = $input['name'];
+            $product->price = $input['price'];
+            $product->category_id = $input['category_id'];
+            $product->description = $input['description'];
+            $product->save();
+
+            DB::commit();
+
+            return response()->json([
+                "success" => true,
+                "message" => "Product updated successfully.",
+                "data" => $product
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
     /**
      * Remove the specified resource from storage.
@@ -103,11 +141,18 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
-        $product->delete();
-        return response()->json([
-            "success" => true,
-            "message" => "Product deleted successfully.",
-            "data" => $product
-        ]);
+        DB::beginTransaction();
+        try {
+            $product->delete();
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Product deleted successfully.",
+                "data" => $product
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Cart;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
@@ -37,20 +38,27 @@ class CartController extends Controller
             'qty' => 'required'
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        session_start();
-        $cart = Cart::create([
-            'user_id' => $request->user_id,
-            'product_id' => $request->product_id,
-            'qty' => $request->qty,
-            'session_id' => session_id(),// $request->session()->regenerate()
-        ]);
-        return response()->json([
-            "success" => true,
-            "message" => "Cart created successfully.",
-            "data" => $cart
-        ]);
+        DB::beginTransaction();
+        try {
+            session_start();
+            $cart = Cart::create([
+                'user_id' => auth()->user()->id,
+                'product_id' => $request->product_id,
+                'qty' => $request->qty,
+                'session_id' => session_id(),
+            ]);
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Cart created successfully.",
+                "data" => $cart
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
     /**
      * Display the specified resource.
@@ -85,16 +93,23 @@ class CartController extends Controller
             'product_id' => 'required'
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        $cart->qty = $input['qty'];
-        $cart->product_id = $input['product_id'];
-        $cart->save();
-        return response()->json([
-            "success" => true,
-            "message" => "Cart updated successfully.",
-            "data" => $cart
-        ]);
+        DB::beginTransaction();
+        try {
+            $cart->qty = $input['qty'];
+            $cart->product_id = $input['product_id'];
+            $cart->save();
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Cart updated successfully.",
+                "data" => $cart
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
     /**
      * Remove the specified resource from storage.
@@ -104,11 +119,18 @@ class CartController extends Controller
      */
     public function destroy(Cart $cart)
     {
-        $cart->delete();
-        return response()->json([
-            "success" => true,
-            "message" => "Cart deleted successfully.",
-            "data" => $cart
-        ]);
+        DB::beginTransaction();
+        try {
+            $cart->delete();
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Cart deleted successfully.",
+                "data" => $cart
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
 }

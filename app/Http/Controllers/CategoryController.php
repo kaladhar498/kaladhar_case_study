@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Category;
+use Illuminate\Support\Facades\DB;
+
 class CategoryController extends Controller
 {
     /**
@@ -35,14 +37,21 @@ class CategoryController extends Controller
             'description' => 'required'
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        $category = Category::create($input);
-        return response()->json([
-            "success" => true,
-            "message" => "Category created successfully.",
-            "data" => $category
-        ]);
+        DB::beginTransaction();
+        try {
+            $category = Category::create($input);
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Category created successfully.",
+                "data" => $category
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
     /**
      * Display the specified resource.
@@ -54,7 +63,7 @@ class CategoryController extends Controller
     {
         $category = Category::find($id);
         if (is_null($category)) {
-            return $this->sendError('Category not found.');
+            return response()->json(['error' => 'Category not found.'], 401);
         }
         return response()->json([
             "success" => true,
@@ -77,16 +86,23 @@ class CategoryController extends Controller
             'description' => 'required'
         ]);
         if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
+            return response()->json(['error' => $validator->errors()], 401);
         }
-        $category->name = $input['name'];
-        $category->detail = $input['description'];
-        $category->save();
-        return response()->json([
-            "success" => true,
-            "message" => "Category updated successfully.",
-            "data" => $category
-        ]);
+        DB::beginTransaction();
+        try {
+            $category->name = $input['name'];
+            $category->detail = $input['description'];
+            $category->save();
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Category updated successfully.",
+                "data" => $category
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
     /**
      * Remove the specified resource from storage.
@@ -96,11 +112,18 @@ class CategoryController extends Controller
      */
     public function destroy(Category $category)
     {
-        $category->delete();
-        return response()->json([
-            "success" => true,
-            "message" => "Category deleted successfully.",
-            "data" => $category
-        ]);
+        DB::beginTransaction();
+        try {
+            $category->delete();
+            DB::commit();
+            return response()->json([
+                "success" => true,
+                "message" => "Category deleted successfully.",
+                "data" => $category
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', "Exception: " . $e->getMessage());
+        }
     }
 }
