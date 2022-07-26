@@ -3,6 +3,9 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CartController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -22,4 +25,9 @@ Route::post('/login', [AuthController::class, 'login']);
 // });
 Route::group(['middleware' => ['auth:sanctum', 'cors', 'json.response']], function () {
     Route::post('/sign-out', [AuthController::class, 'logout']);
+
+    Route::resource('products', ProductController::class);
+    Route::resource('categories', CategoryController::class);
+    Route::resource('cart', CartController::class);
+
 });
